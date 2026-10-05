@@ -16,6 +16,16 @@ btop - Resource monitor that shows usage and stats for processor, memory, disks,
 
 **btop** is a program that shows usage and stats for processor, memory, disks, network, and processes.
 
+On macOS, **Used** includes the physical RAM occupied by compressed data.
+**(Compr.)**, abbreviated **(Cmp)** in compact layouts, shows this part of Used.
+Do not add it to Used. **Cached** shows file-backed memory. **Free** excludes
+speculative pages that contain cached data. **Available** is total RAM minus
+Used. It includes reclaimable memory and does not guarantee that a new
+allocation will avoid compression or swap.
+
+The macOS memory box also shows the system's memory **Pressure**: Normal, Warn,
+or Critical. N/A means the system did not provide a known pressure level.
+
 # OPTIONS
 
 The program follows the usual GNU command line syntax, with long options

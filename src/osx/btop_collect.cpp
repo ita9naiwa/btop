@@ -52,6 +52,7 @@ tab-size = 4
 #include "sensors.hpp"
 #endif
 #include "smc.hpp"
+#include "memory.hpp"
 #endif
 
 #include <cmath>
@@ -566,14 +567,7 @@ namespace Gpu {
 				host_page_size(mach_port, &page_size);
 
 				if (host_statistics64(mach_port, HOST_VM_INFO64, (host_info64_t)&vm_stats, &count) == KERN_SUCCESS) {
-					long long used = (static_cast<int64_t>(vm_stats.active_count)
-						+ static_cast<int64_t>(vm_stats.inactive_count)
-						+ static_cast<int64_t>(vm_stats.wire_count)
-						+ static_cast<int64_t>(vm_stats.speculative_count)
-						+ static_cast<int64_t>(vm_stats.compressor_page_count)
-						- static_cast<int64_t>(vm_stats.purgeable_count)
-						- static_cast<int64_t>(vm_stats.external_page_count)) * static_cast<int64_t>(page_size);
-					if (used < 0) used = 0;
+					const auto used = Mem::used_memory(vm_stats, page_size, gpus_slice[0].mem_total);
 					gpus_slice[0].mem_used = used;
 					if (gpus_slice[0].mem_total > 0) {
 						auto used_pct = static_cast<long long>(round(static_cast<double>(used) * 100.0 / static_cast<double>(gpus_slice[0].mem_total)));
@@ -1249,11 +1243,16 @@ namespace Mem {
 		vm_statistics64 p;
 		mach_msg_type_number_t info_size = HOST_VM_INFO64_COUNT;
 		if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&p, &info_size) == 0) {
-			mem.stats.at("free") = p.free_count * Shared::pageSize;
+			// Speculative pages are included in free_count, but contain cached data.
+			mem.stats.at("free") = (p.free_count - std::min(p.free_count, p.speculative_count)) * Shared::pageSize;
 			mem.stats.at("cached") = p.external_page_count * Shared::pageSize;
-			mem.stats.at("used") = (p.active_count + p.wire_count) * Shared::pageSize;
+			mem.stats.at("compressed") = static_cast<uint64_t>(p.compressor_page_count) * Shared::pageSize;
+			mem.stats.at("used") = used_memory(p, Shared::pageSize, Shared::totalMem);
 			mem.stats.at("available") = Shared::totalMem - mem.stats.at("used");
 		}
+		mem.pressure = 0;
+		size_t pressure_size = sizeof(mem.pressure);
+		sysctlbyname("kern.memorystatus_vm_pressure_level", &mem.pressure, &pressure_size, nullptr, 0);
 
 		int mib[2] = {CTL_VM, VM_SWAPUSAGE};
 

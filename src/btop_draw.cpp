@@ -1262,11 +1262,12 @@ namespace Mem {
 
 			//? Mem graphs and meters
 			for (const auto& name : mem_names) {
-
+				const auto& gradient = name == "compressed" ? "used"s : name;
+				const int meter_width = max(0, mem_meter - (name == "compressed" and mem_size == 1 ? 4 : 0));
 				if (use_graphs)
-					mem_graphs[name] = Draw::Graph{mem_meter, graph_height, name, safeVal(mem.percent, name), graph_symbol};
+					mem_graphs[name] = Draw::Graph{meter_width, graph_height, gradient, safeVal(mem.percent, name), graph_symbol};
 				else
-					mem_meters[name] = Draw::Meter{mem_meter, name};
+					mem_meters[name] = Draw::Meter{meter_width, gradient};
 			}
 			if (show_swap and has_swap) {
 				for (const auto& name : swap_names) {
@@ -1352,8 +1353,9 @@ namespace Mem {
 		out += Mv::to(y + 1, x + 2) + Theme::c("title") + Fx::b + "Total:" + rjust(floating_humanizer(totalMem), mem_width - 9) + Fx::ub + Theme::c("main_fg");
 		vector<string> comb_names (mem_names.begin(), mem_names.end());
 		if (show_swap and has_swap and not swap_disk) comb_names.insert(comb_names.end(), swap_names.begin(), swap_names.end());
+		const int row_height = mem_size > 2 ? max(2, graph_height + 1) : max(1, graph_height);
 		for (const auto& name : comb_names) {
-			if (cy > height - 4) break;
+			if (cy + row_height > height - 2) break;
 			string title;
 			if (name == "swap_used") {
 				if (cy > height - 5) break;
@@ -1368,6 +1370,9 @@ namespace Mem {
 			}
 			else if (name == "swap_free")
 				title = "Free";
+			else if (name == "compressed")
+				// Parentheses mark a subset of Used, not an additional allocation.
+				title = mem_size > 2 and big_mem ? "(Compr.)" : "(Cmp)";
 
 			if (title.empty()) title = capitalize(name);
 			const string humanized = floating_humanizer(safeVal(mem.stats, name));
@@ -1383,13 +1388,21 @@ namespace Mem {
 				cy += (graph_height == 0 ? 2 : graph_height + 1);
 			}
 			else {
-				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
+				out += Mv::to(y+1+cy, x+1+cx) + ljust(title, (mem_size > 1 or name == "compressed" ? 5 : 1)) + (graph_height >= 2 ? "" : " ")
 					+ graphics + Theme::c("title") + rjust(humanized, (mem_size > 1 ? 9 : 7));
 				cy += (graph_height == 0 ? 1 : graph_height);
 			}
 		}
 		if (graph_height > 0 and cy < height - 2)
 			out += Mv::to(y+1+cy, x+1+cx) + divider;
+	#ifdef __APPLE__
+		// Keep the native pressure indicator visible even in compact layouts.
+		const string pressure = mem.pressure == 1 ? "Normal" : mem.pressure == 2 ? "Warn"
+			: mem.pressure == 4 ? "Critical" : "N/A";
+		out += Mv::to(y + height - 1, x + 2) + Theme::c("mem_box") + Symbols::title_left
+			+ Theme::c("title") + (mem_width > 21 ? "Pressure: " : "P: ") + ljust(pressure, 8)
+			+ Theme::c("mem_box") + Symbols::title_right;
+	#endif
 
 		//? Disks
 		if (show_disks) {
@@ -2461,7 +2474,7 @@ namespace Draw {
 			else
 				mem_width = width - 1;
 
-			item_height = has_swap and not swap_disk ? 6 : 4;
+			item_height = mem_names.size() + (has_swap and not swap_disk ? swap_names.size() : 0);
 			if (height - (has_swap and not swap_disk ? 3 : 2) > 2 * item_height)
 				mem_size = 3;
 			else if (mem_width > 25)

@@ -266,7 +266,11 @@ namespace Mem {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
 	extern bool has_swap, shown, redraw;
-	const array mem_names { "used"s, "available"s, "cached"s, "free"s };
+	const array mem_names { "used"s,
+	#ifdef __APPLE__
+		"compressed"s,
+	#endif
+		"available"s, "cached"s, "free"s };
 	const array swap_names { "swap_used"s, "swap_free"s };
 	extern int disk_ios;
 
@@ -288,11 +292,20 @@ namespace Mem {
 	};
 
 	struct mem_info {
+	#ifdef __APPLE__
+		int pressure = 0;
+	#endif
 		std::unordered_map<string, uint64_t> stats =
 			{{"used", 0}, {"available", 0}, {"cached", 0}, {"free", 0},
+		#ifdef __APPLE__
+			{"compressed", 0},
+		#endif
 			{"swap_total", 0}, {"swap_used", 0}, {"swap_free", 0}};
 		std::unordered_map<string, deque<long long>> percent =
 			{{"used", {}}, {"available", {}}, {"cached", {}}, {"free", {}},
+		#ifdef __APPLE__
+			{"compressed", {}},
+		#endif
 			{"swap_total", {}}, {"swap_used", {}}, {"swap_free", {}}};
 		std::unordered_map<string, disk_info> disks;
 		vector<string> disks_order;
